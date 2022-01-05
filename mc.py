@@ -2,11 +2,22 @@ import numpy as np
 from sympy import symbols, Eq, nsolve, solve, linsolve, solveset, tan, Reals, Interval
 import math
 import random
-import roots
 import scipy.integrate as integrate
 import scipy.special as special
 
 def draw_sample(theta,b,func_k,m,m_KL):
+    '''
+    Draws samples using the Karhunen-Loève expansion
+    
+        Parameters:
+                theta (np.array(m)): Array of eigenvalues
+                b (np.array(m,m_KL)): Array of eigenvectors
+                func_k:
+                m (int): Number of cells
+                m_KL (int): Truncation point of KL expansion
+        Returns:
+                Sample k
+    '''
     k = np.zeros(m)
 
     for j in range(m):
@@ -20,6 +31,17 @@ def draw_sample(theta,b,func_k,m,m_KL):
 
 
 def solve_pde(k,m,p_0,p_1):
+    '''
+    Calculates solution of pde
+    
+        Parameters:
+                k (np.array(m)): Discrete values of k
+                m (int): Number of cells
+                p_0 (float): Lower boundary condition (Dirichlet)
+                p_1 (float): Upper boundary condition (Dirichlet)
+        Returns:
+                Solution p of the pde
+    '''
     # initialize f
     f = np.zeros(m)
     f[0] = 2*k[0]*p_0
@@ -123,37 +145,151 @@ def standard_mc(m_KL,m,N,func_k,p_0,p_1):
         sum += solve_pde(k,m,p_0,p_1)
     return sum/N
 
-def k_eff(k,p,p1):
-    print(k)
-    print((p[-1]-0)*(len(p)-1))
-    return -k[-1]*(p[-1]-0)*(len(p)-1)
+def k_eff(k,p,p_1):
+    return -k[-1]*(p_1-p[-1])*(2*len(p))
 
 # calculate the standard Monte-Carlo estimator
 def standard_mc_new(m_KL,m,N,func_k,p_0,p_1,Q):
+    c = 0
     theta, b = eigenpairs_discrete(m_KL,m,0.3,1,max(m,m_KL))
     sum = 0
     for i in range(N):
         k = draw_sample(theta,b,func_k,m,m_KL)
-        sum += Q(k,solve_pde(k,m,p_0,p_1),0)
+        sum += Q(k,solve_pde(k,m,p_0,p_1),p_1)
+        c += m
+        
+    print(f"Kosten: {c}")
     return sum/N
 
 # calculate the multilevel Monte-Carlo estimator
-def mlmc(level,m_KL,m_0,N,func_k,p_0,p_1):
-    m = np.zeros(level,int)
-    m[0] = m_0
+def mlmc(m_KL,m_0,N,func_k,Q,p_0,p_1):
+    c = 0 
+    level = len(N)
+     
+    estimator = 0      
+    Q_coarse_level = [0]*N[-1]
+    Q_fine_level = 0
+    k = []
     
-    theta, b = eigenpairs(m_KL,m_0)    
-    sum = 0  
-    for i in range(N[0]):
-        k = draw_sample(theta,b,func_k,m_0,m_KL)
-        sum += solve_pde(k,m_0,p_0,p_1)
-    estimator = sum/N[0]
+    #Calculate Q on finest mesh
+    m = (2**(level))*m_0
+    theta, b = eigenpairs_discrete(m_KL,m,0.3,1,max(m,m_KL))
+    for i in range(N[level-1]):
+        sample = draw_sample(theta,b,func_k,m,m_KL)
+        k.append(sample)
+        Q_coarse_level[i] = Q(sample,solve_pde(sample,m,p_0,p_1),p_1)
+        c += m
+      
+    #go through all meshs
+    for i in range(level-1,0,-1):
+        #print(f"Level: {i+1}, Q = {Q_coarse_level}")
+        Q_fine_level = Q_coarse_level
+        m = (2**i)*m_0
+        
+        Q_coarse_level = [0]*N[i-1]
+        sum = 0
+        for j in range(N[i]):
+            Q_coarse_level[j] = Q(k[j],solve_pde(k[j],m,p_0,p_1),p_1)
+            c += m
+            sum += (Q_fine_level[j]-Q_coarse_level[j])
+        estimator += (sum/N[i])
+        
+        for j in range(N[i],N[i-1]):
+            sample = draw_sample(theta,b,func_k,m,m_KL)
+            k.append(sample)
+            Q_coarse_level[j] = Q(sample,solve_pde(sample,m,p_0,p_1),p_1)
+            c += m
+        
+    #Calculate Q on coarsest mesh
+    sum = 0
+    for i in range(N[1]):
+        sum += Q_coarse_level[i]
+    for i in range(N[1],N[0]):
+        sample = draw_sample(theta,b,func_k,m_0,m_KL)
+        sum += Q(sample,solve_pde(sample,m_0,p_0,p_1),p_1)
+        c += m_0
+    estimator += (sum/N[0])
     
-    for i in range(1,level):
-        m[i] = (2**i)*m_0
-        theta, b = eigenpairs(m_KL,m[i])  
-        sum = 0  
-        for i in range(N[i]):
-            k = draw_sample(theta,b,func_k,m[i],m_KL)
-            sum += (solve_pde(k,m[i],p_0,p_1)-solve_pde(k,m[i-1],p_0,p_1))
-        estimator += sum/N[i]
+    print(f"Kosten: {c}")
+    return estimator
+
+# calculate the multilevel Monte-Carlo estimator
+def mlmc_new(m_KL,M,func_k,Q,p_0,p_1):
+    c = 0 #costs
+     
+    estimator = 0      
+    Q_list = [[]]
+    k = []
+    
+    '''
+    Step 1
+    '''
+    level = 0 #start with L=0
+    
+    '''
+    Step 2
+    '''
+    #initial number of samples on Level L
+    N[level] = 10 
+    
+    #Calculate Q on finest mesh 
+    m = M
+    theta, b = eigenpairs_discrete(m_KL,m,0.3,1,max(m,m_KL))
+    for i in range(N[-1]):
+        sample = draw_sample(theta,b,func_k,m,m_KL)
+        k.append(sample)
+        Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
+        c += m
+        
+    m = m/2
+    Q_list.insert(0,[])
+    theta, b = eigenpairs_discrete(m_KL,m,0.3,1,max(m,m_KL))
+    for i in range(N[-1]):
+        sample = draw_sample(theta,b,func_k,m,m_KL)
+        k.append(sample)
+        Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
+        c += m
+    
+    
+    
+    #Calculate Q on finest mesh
+    m = (2**(level))*m_0
+    theta, b = eigenpairs_discrete(m_KL,m,0.3,1,max(m,m_KL))
+    for i in range(N[-1]):
+        sample = draw_sample(theta,b,func_k,m,m_KL)
+        k.append(sample)
+        Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
+        c += m
+      
+    #go through all meshs
+    for i in range(level-1,0,-1):
+        #print(f"Level: {i+1}, Q = {Q_coarse_level}")
+        m = (2**i)*m_0
+        
+        Q_list.insert(0,[])
+        sum = 0
+        for j in range(N[i]):
+            Q_list[0].append(Q(k[j],solve_pde(k[j],m,p_0,p_1),p_1))
+            c += m
+            sum += (Q_list[0][j]-Q_list[1][j])
+        estimator += (sum/N[i])
+        
+        for j in range(N[i],N[i-1]):
+            sample = draw_sample(theta,b,func_k,m,m_KL)
+            k.append(sample)
+            Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
+            c += m
+        
+    #Calculate Q on coarsest mesh
+    sum = 0
+    for i in range(N[1]):
+        sum += Q_list[0][i]
+    for i in range(N[1],N[0]):
+        sample = draw_sample(theta,b,func_k,m_0,m_KL)
+        sum += Q(sample,solve_pde(sample,m_0,p_0,p_1),p_1)
+        c += m_0
+    estimator += (sum/N[0])
+    
+    print(f"Kosten: {c}")
+    return estimator
+
