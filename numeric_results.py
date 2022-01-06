@@ -41,17 +41,17 @@ def eigenvalues_test(m_KL):
     plt.legend()
     plt.show()
     
-def discretization_test():
+def discretization_test(func_k,func_p):
    # number of samples
     N = 100
     # truncation of KL-expansion
-    m_KL = 800
+    m_KL = 100
     # Mesh size
-    m = 100
+    m = 8
 
     # Dirichlet boundary conditions
     p_0 = 1
-    p_1 = 0.125
+    p_1 = 0
 
     s = np.zeros(1000)
     for i in range(1000):
@@ -138,13 +138,13 @@ def standard_mc_keff_test(N,m_KL,m,func_k,func_p):
 '''
 2) Diskretisierung ist korrekt
 '''
-#discretization_test()
+#discretization_test(func_k3,func_p3)
 
 
 '''
 3) Standard Montecarlo
 '''
-#standard_montecarlo_test(N=100,m_KL=800,m=64,func_k=func_k3,func_p=func_p3)
+#standard_montecarlo_test(N=3,m_KL=800,m=8,func_k=func_k3,func_p=func_p3)
 
 
 '''
@@ -168,10 +168,31 @@ for i in range(m):
 res = mc.k_eff(l,r,0)
 print(f"Correct result: {res} \n")
 
-standard_mc = mc.standard_mc_new(800,64,100,func_k3,1,0,mc.k_eff)
-print(f"Standard MC \n Ergebnis: {standard_mc}, Fehler: {abs(res-standard_mc)} \n")
+#standard_mc = mc.standard_mc_new(800,16,100,func_k3,1,0,mc.k_eff)
+#print(f"Standard MC \n Ergebnis: {standard_mc[0]}, Fehler: {abs(res-standard_mc[0])}, Kosten: {standard_mc[1]} \n")
+#print(np.var(standard_mc[2]))
+#print(abs(standard_mc[2]))
 
-multilevel_mc = mc.mlmc(800,8,[100,50,25,5],func_k3,mc.k_eff,1,0)
-print(f"Multilevel MC \n Ergebnis: {multilevel_mc}, Fehler: {abs(res-multilevel_mc)}")
+#multilevel_mc = mc.mlmc_new(100,16,func_k3,mc.k_eff,1,0,1e-3)
+#print(f"Multilevel MC \n Ergebnis: {multilevel_mc}, Fehler: {abs(res-multilevel_mc)}")
 
 
+multilevel_mc = mc.mlmc(100,4,[10,10,10],func_k3,mc.k_eff,1,0)
+print(f"Multilevel MC \n Ergebnis: {multilevel_mc[0]}, Fehler: {abs(res-multilevel_mc[0])}, Kosten: {multilevel_mc[1]}")
+
+n = len(multilevel_mc[2])
+v = np.zeros(n)
+x = np.zeros(n)
+
+for i in range(len(multilevel_mc[2])):
+    x[i] = i
+    v[i] = mc.calc_variance(multilevel_mc[2][i])
+
+w = np.zeros(n-1)
+for i in range(n-1):
+    w[i] = mc.calc_variance(np.array(multilevel_mc[2][i+1])-np.array(multilevel_mc[2][i]))
+    
+plt.plot(x,v)
+plt.plot(x[1:],w)
+plt.yscale('log', base=2)
+plt.show()
