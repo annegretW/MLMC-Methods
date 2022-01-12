@@ -1,8 +1,9 @@
 import mc
+import math
 import matplotlib.pyplot as plt
 import numpy as np
 
-#example functions k
+#example for expected value of k
 def func_k1(x):
     return (-0.5*x+1)**(-2)/100
 
@@ -10,8 +11,20 @@ def func_k2(x):
     return (-x+1)**(-2)
 
 def func_k3(x):
-    return 1
+    return 10
 
+def func_k4(x):
+    if(x<0.2):
+        return 20
+    elif(x<0.4):
+        return 30
+    elif(x<0.6):
+        return 10
+    elif(x<0.8):
+        return 50
+    else:
+        return 80
+    
 #example functions p
 def func_p1(x):
     return (-0.5*x+1)**3
@@ -40,7 +53,38 @@ def eigenvalues_test(m_KL):
     plt.ylabel(r'Eigenwerte $\theta_n$')
     plt.legend()
     plt.show()
+ 
+def eigenvalues_sum(m_KL):
+    fig, ax = plt.subplots()
+    t = np.linspace(1,m_KL,m_KL)
     
+    theta,b = mc.eigenpairs_discrete(m_KL,10,1,1)
+    x = np.zeros(m_KL)
+    x[0] = theta[0]
+    for i in range(1,m_KL):
+        x[i] = x[i-1]+theta[i]
+    ax.loglog(t, x, label='$\lambda=1$')
+    
+    theta,b = mc.eigenpairs_discrete(m_KL,10,0.1,1)
+    y = np.zeros(m_KL)
+    y[0] = theta[0]
+    for i in range(1,m_KL):
+        y[i] = y[i-1]+theta[i]
+    ax.loglog(t, y, label='$\lambda=0.1$')
+    
+    theta,b = mc.eigenpairs_discrete(m_KL,10,0.01,1)
+    z = np.zeros(m_KL)
+    z[0] = theta[0]
+    for i in range(1,m_KL):
+        z[i] = z[i-1]+theta[i]
+    ax.loglog(t, z, label='$\lambda=0.01$')
+    
+    plt.xlabel('n')
+    plt.ylabel(r'Summe der ersten n Eigenwerte')
+    plt.legend()
+    plt.show()
+    
+'''    
 def discretization_test(func_k,func_p):
    # number of samples
     N = 100
@@ -73,7 +117,8 @@ def discretization_test(func_k,func_p):
     plt.plot(s,r)
     plt.legend(['approximation','p'])
     plt.show()
-    
+'''
+
 def standard_montecarlo_test(N,m_KL,m,func_k,func_p):
     p_0 = func_p(0)
     p_1 = func_p(1)
@@ -122,17 +167,44 @@ def standard_mc_keff_test(N,m_KL,m,func_k,func_p):
     for i in range(m):
         l[i] = func_k((2*i+1)/(2*m))
     
-    estimation = mc.standard_mc_new(m_KL,m,N,func_k,p_0,p_1,mc.k_eff)
+    estimation = mc.standard_mc(m_KL,m,N,func_k,p_0,p_1,mc.k_eff)
     solution = mc.k_eff(l,r,p_1)
     print(estimation)
     print(solution)
     
     return abs(estimation-solution)
+ 
+
+def constant_variance(N,m_KL,m,func_k):
+    standard_mc = []
+    for i in range(len(m)):
+        standard_mc.append(mc.standard_mc(800,m[i],100,func_k3,1,0,mc.k_eff)[2])
+    
+    v_mean = np.zeros(len(m))
+    v_var = np.zeros(len(m))
+    x = np.zeros(len(m))
+    for i in range(len(m)):
+        x[i] = i
+        v_mean[i] = math.log2(abs(np.mean(standard_mc[i])))
+        v_var[i] = math.log2(abs(np.var(standard_mc[i])))
+        print(v_var[i])
+        
+    plt.plot(x,v_mean)
+    plt.xlabel('Level l')
+    plt.ylabel(r'$\log_2$-Erwartungswert')
+    plt.show()
+    
+    plt.plot(x,v_var)
+    plt.xlabel('Level l')
+    plt.ylabel(r'$\log_2$-Varianz')
+    plt.show()
+
     
 '''
 1) Eigenwerte (Fig. 1 links)
 '''
 #eigenvalues_test(1000)
+#eigenvalues_sum(1000)
 
 
 '''
@@ -144,55 +216,57 @@ def standard_mc_keff_test(N,m_KL,m,func_k,func_p):
 '''
 3) Standard Montecarlo
 '''
-#standard_montecarlo_test(N=3,m_KL=800,m=8,func_k=func_k3,func_p=func_p3)
+#standard_montecarlo_test(N=3,m_KL=800,m=128,func_k=func_k3,func_p=func_p3)
 
 
 '''
 4) Calculate k_eff with Standard Montecarlo
 '''
-
 #standard_mc_keff_test(N=100,m_KL=800,m=64,func_k=func_k3,func_p=func_p3)
 
 
-
-#mc.mlmc(level=2,m_KL=80,m_0=16,N=[100,10],func_k=func_k,p_0=1,p_1=0.125)
-m = 100
-r = np.zeros(m)
-for i in range(m):
-    r[i] = func_p3((2*i+1)/(2*m))
-        
-l = np.zeros(m)
-for i in range(m):
-    l[i] = func_k3((2*i+1)/(2*m))
-    
-res = mc.k_eff(l,r,0)
-print(f"Correct result: {res} \n")
-
-#standard_mc = mc.standard_mc_new(800,16,100,func_k3,1,0,mc.k_eff)
-#print(f"Standard MC \n Ergebnis: {standard_mc[0]}, Fehler: {abs(res-standard_mc[0])}, Kosten: {standard_mc[1]} \n")
-#print(np.var(standard_mc[2]))
-#print(abs(standard_mc[2]))
-
-#multilevel_mc = mc.mlmc_new(100,16,func_k3,mc.k_eff,1,0,1e-3)
-#print(f"Multilevel MC \n Ergebnis: {multilevel_mc}, Fehler: {abs(res-multilevel_mc)}")
+'''
+5) Variance of Q_M is independent of M
+'''
+constant_variance(N=100,m_KL=800,m=[16,32,64,128],func_k=func_k3)
 
 
-multilevel_mc = mc.mlmc(100,4,[10,10,10],func_k3,mc.k_eff,1,0)
-print(f"Multilevel MC \n Ergebnis: {multilevel_mc[0]}, Fehler: {abs(res-multilevel_mc[0])}, Kosten: {multilevel_mc[1]}")
+'''
+multilevel_mc = mc.mlmc_changed(800,16,[100,100,100,100,100,100],func_k3,mc.k_eff,1,0)
+#print(f"Multilevel MC \n Ergebnis: {multilevel_mc[0]}, Fehler: {abs(res-multilevel_mc[0])}, Kosten: {multilevel_mc[1]}")
 
 n = len(multilevel_mc[2])
-v = np.zeros(n)
+
+v_mean = np.zeros(n)
+v_var = np.zeros(n)
 x = np.zeros(n)
-
-for i in range(len(multilevel_mc[2])):
+for i in range(n):
     x[i] = i
-    v[i] = mc.calc_variance(multilevel_mc[2][i])
+    v_mean[i] = math.log2(abs(np.mean(multilevel_mc[2][i])))
+    v_var[i] = math.log2(abs(np.var(multilevel_mc[2][i])))
+    print(v_var[i])
 
-w = np.zeros(n-1)
+print('-----------------------------------------')
+
+w_mean = np.zeros(n-1)
+w_var = np.zeros(n-1)
 for i in range(n-1):
-    w[i] = mc.calc_variance(np.array(multilevel_mc[2][i+1])-np.array(multilevel_mc[2][i]))
+    w_mean[i] = math.log2(abs(np.mean(multilevel_mc[3][i])))
+    w_var[i] = math.log2(abs(np.var(multilevel_mc[3][i])))
+    print(w_var[i])
     
-plt.plot(x,v)
-plt.plot(x[1:],w)
-plt.yscale('log', base=2)
+plt.plot(x,v_mean)
+plt.plot(x[1:],w_mean)
+plt.legend([r'$Q_l$', '$Y_l$'])
+plt.xlabel('Level l')
+plt.ylabel(r'$\log_2$-Erwartungswert')
 plt.show()
+
+plt.plot(x,v_var)
+plt.plot(x[1:],w_var)
+plt.legend([r'$Q_l$', '$Y_l$'])
+plt.xlabel('Level l')
+plt.ylabel(r'$\log_2$-Varianz')
+plt.show()
+'''
+
