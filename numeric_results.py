@@ -11,7 +11,7 @@ def func_k2(x):
     return (-x+1)**(-2)
 
 def func_k3(x):
-    return 10
+    return 50
 
 def func_k4(x):
     if(x<0.2):
@@ -144,7 +144,7 @@ def standard_montecarlo_test(N,m_KL,m,func_k,func_p):
         l[i] = func_k((2*i+1)/(2*m))
 
     sol = mc.standard_mc(m_KL,m,N,func_k,p_0,p_1)  
-    print(f"Der maximale Fehler beträgt {np.max(q-sol)}.")
+    #print(f"Der maximale Fehler betraegt {np.max(q-sol)}.")
     
     print(mc.k_eff(l,sol,0))
     print(mc.k_eff(l,q,0))
@@ -167,18 +167,26 @@ def standard_mc_keff_test(N,m_KL,m,func_k,func_p):
     for i in range(m):
         l[i] = func_k((2*i+1)/(2*m))
     
-    estimation = mc.standard_mc(m_KL,m,N,func_k,p_0,p_1,mc.k_eff)
+    estimation = mc.standard_mc(m_KL,m,N,func_k,p_0,p_1,mc.k_eff)[0]
     solution = mc.k_eff(l,r,p_1)
-    print(estimation)
-    print(solution)
-    
+    #print(estimation)
+    #print(solution)
+    print(abs(estimation-solution))
     return abs(estimation-solution)
  
-
+def error_KL(m_KL,m,func_k,correlation_length,variance):
+    theta, b = mc.eigenpairs_discrete(50,m,correlation_length,variance)
+    result = mc.k_eff(mc.draw_sample(theta,b,func_k,m,50),sol)
+    
+    truncated_result = []
+    for i in range(len(m_KL)):
+        h = mc.k_eff(draw_sample(theta,b,func_k,m,m_KL[i]))
+        truncated_result.append((result-k)/result)
+    
 def constant_variance(N,m_KL,m,func_k):
     standard_mc = []
     for i in range(len(m)):
-        standard_mc.append(mc.standard_mc(800,m[i],100,func_k3,1,0,mc.k_eff)[2])
+        standard_mc.append(mc.standard_mc(m_KL,m[i],N,func_k3,1,0,mc.k_eff)[2])
     
     v_mean = np.zeros(len(m))
     v_var = np.zeros(len(m))
@@ -187,8 +195,8 @@ def constant_variance(N,m_KL,m,func_k):
         x[i] = i
         v_mean[i] = math.log2(abs(np.mean(standard_mc[i])))
         v_var[i] = math.log2(abs(np.var(standard_mc[i])))
-        print(v_var[i])
-        
+        print(abs(np.var(standard_mc[i])))
+    '''    
     plt.plot(x,v_mean)
     plt.xlabel('Level l')
     plt.ylabel(r'$\log_2$-Erwartungswert')
@@ -198,7 +206,7 @@ def constant_variance(N,m_KL,m,func_k):
     plt.xlabel('Level l')
     plt.ylabel(r'$\log_2$-Varianz')
     plt.show()
-
+'''
     
 '''
 1) Eigenwerte (Fig. 1 links)
@@ -222,17 +230,39 @@ def constant_variance(N,m_KL,m,func_k):
 '''
 4) Calculate k_eff with Standard Montecarlo
 '''
-#standard_mc_keff_test(N=100,m_KL=800,m=64,func_k=func_k3,func_p=func_p3)
+#standard_mc_keff_test(N=300,m_KL=800,m=64,func_k=func_k3,func_p=func_p3)
 
 
 '''
 5) Variance of Q_M is independent of M
 '''
-constant_variance(N=100,m_KL=800,m=[16,32,64,128],func_k=func_k3)
+#constant_variance(N=100,m_KL=800,m=[16,32,64,128,256],func_k=func_k3)
 
+
+print("\n ....................................................... \n")
+
+multilevel_mc = mc.mlmc(800,16,[100,100,100,100,100],func_k3,mc.k_eff,1,0)
+print(math.log2(abs(np.var(multilevel_mc[3][0]))))
+print(math.log2(abs(np.var(multilevel_mc[3][1]))))
+print(math.log2(abs(np.var(multilevel_mc[3][2]))))
+print(math.log2(abs(np.var(multilevel_mc[3][3]))))
+
+standard_mc = mc.standard_mc(800,16,100,func_k3,1,0,mc.k_eff)
+print(math.log2(abs(np.var(standard_mc[2]))))
+
+standard_mc = mc.standard_mc(800,32,100,func_k3,1,0,mc.k_eff)
+print(math.log2(abs(np.var(standard_mc[2]))))
+
+standard_mc = mc.standard_mc(800,64,100,func_k3,1,0,mc.k_eff)
+print(math.log2(abs(np.var(standard_mc[2]))))
+
+standard_mc = mc.standard_mc(800,128,100,func_k3,1,0,mc.k_eff)
+print(math.log2(abs(np.var(standard_mc[2]))))
+
+standard_mc = mc.standard_mc(800,64,100,func_k3,1,0,mc.k_eff)
+print(math.log2(abs(np.var(standard_mc[2]))))
 
 '''
-multilevel_mc = mc.mlmc_changed(800,16,[100,100,100,100,100,100],func_k3,mc.k_eff,1,0)
 #print(f"Multilevel MC \n Ergebnis: {multilevel_mc[0]}, Fehler: {abs(res-multilevel_mc[0])}, Kosten: {multilevel_mc[1]}")
 
 n = len(multilevel_mc[2])
@@ -254,7 +284,7 @@ for i in range(n-1):
     w_mean[i] = math.log2(abs(np.mean(multilevel_mc[3][i])))
     w_var[i] = math.log2(abs(np.var(multilevel_mc[3][i])))
     print(w_var[i])
-    
+
 plt.plot(x,v_mean)
 plt.plot(x[1:],w_mean)
 plt.legend([r'$Q_l$', '$Y_l$'])
@@ -270,3 +300,5 @@ plt.ylabel(r'$\log_2$-Varianz')
 plt.show()
 '''
 
+#mc.mlmc_algo(800,16,func_k3,mc.k_eff,1,0,1e-2,1.75)
+#error_KL([10,50,100,150],100,func_k3,0.3,1)

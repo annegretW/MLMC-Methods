@@ -7,8 +7,7 @@ import scipy.special as special
 
 def draw_sample(theta,b,func_k,m,m_KL,sigma=None):
     '''
-    Draws samples using the Karhunen-Loève expansion
-    
+    Draws samples using the Karhunen-Loeve expansion
         Parameters:
                 theta (np.array(m)): Array of eigenvalues
                 b (np.array(m,m_KL)): Array of eigenvectors
@@ -42,14 +41,13 @@ def convert_sample(k):
     n = int(len(k)/2)
     res = np.zeros(n)
     for i in range(n):
-        res[i] = (k[2*i]+k[2*i+1])/(2)
-        #res[i] = k[2*i]
+        #res[i] = (k[2*i]+k[2*i+1])/(2)
+        res[i] = k[2*i]
     return res   
     
 def solve_pde(k,m,p_0,p_1):
     '''
     Calculates solution of pde
-    
         Parameters:
                 k (np.array(m)): Discrete values of k
                 m (int): Number of cells
@@ -80,37 +78,10 @@ def solve_pde(k,m,p_0,p_1):
     p = np.linalg.solve(A, f)
     return p
 
-def eigenpairs(m_KL,m):
-    # parameters
-    correlation_length = 0.3
-    variance = 1
-
-    w = np.zeros(m_KL)
-    theta = np.zeros(m_KL)
-    b = np.zeros([m_KL,m])
-
-    x = symbols('x',real=True)
-    expr = Eq((2*correlation_length*x)/((correlation_length**2)*(x**2)-1)-tan(x),0)
-
-    w[0] = nsolve(expr,2)
-    w[1] = nsolve(expr,4.5)
-    for j in range(2,m_KL):
-        w[j] = nsolve(expr,np.pi*j)
-
-    for j in range(m_KL):
-        theta[j] = 2*correlation_length / ((correlation_length**2)*(w[j]**2)+1)            
-
-        for i in range(m):
-            y = i/m
-            h = math.sin(w[j]*y) + correlation_length*w[j]*math.cos(w[j]*y)
-            b[j,i] = h/np.abs(h)
-
-    return theta,b
-
 def covariance(d,correlation_length,variance):
     return (variance**2)*np.exp(-np.linalg.norm(d)/correlation_length)
     
-def eigenpairs_discrete(N,m,correlation_length,variance):
+def eigenpairs_discrete(N,correlation_length,variance):
     C = np.zeros([N,N])
     
     for i in range(N):
@@ -121,43 +92,7 @@ def eigenpairs_discrete(N,m,correlation_length,variance):
     
     return theta,b
 
-def eigenpairs_numerical(m_KL,m,correlation_length,variance):
-    w = np.zeros(m_KL)
-    theta = np.zeros(m_KL)
-    b = np.zeros([m_KL,m])
-
-    x = symbols('x',real=True)
-    expr = Eq((2*correlation_length*x)/((correlation_length**2)*(x**2)-1)-tan(x),0)
-        
-    w[0] = 0
-    for j in range(1,m_KL):
-        k = 3
-        while k<5:
-            try:
-                r = nsolve(expr,w[j-1]+k)
-                if np.abs(r-w[j-1])<10e-5:
-                    k = k+0.1
-                else:
-                    w[j] = r
-                    break
-            except:
-                k = k+1
-            
-    for j in range(m_KL):
-        theta[j] = 2*correlation_length / ((correlation_length**2)*(w[j]**2)+1)
-        
-        for i in range(m):
-            y = i/m
-            h = math.sin(w[j]*y) + correlation_length*w[j]*math.cos(w[j]*y)
-            if h!=0:
-                b[j,i] = h/np.abs(h)
-            else:
-                b[j,i] = 0
-
-    return theta,b
-
 def k_eff(k,p,p_1):
-    #return k[1]
     return -k[-1]*(p_1-p[-1])*(2*len(p))
     #n = len(p)
     #return (p[int((n/2))]+p[int(n/2)-1])/2
@@ -165,7 +100,7 @@ def k_eff(k,p,p_1):
 # calculates the standard Monte-Carlo estimator
 def standard_mc(m_KL,m,N,func_k,p_0,p_1,Q):
     c = 0
-    theta, b = eigenpairs_discrete(m_KL,m,0.3,1)
+    theta, b = eigenpairs_discrete(max(m,m_KL),0.3,1)
     sum = 0
     Q_list = np.zeros(N)
     for i in range(N):
@@ -189,8 +124,7 @@ def mlmc(m_KL,m_0,N,func_k,Q,p_0,p_1):
     
     #Calculate Q on finest mesh
     m = (2**(level-1))*m_0 #mesh size
-    theta, b = eigenpairs_discrete(m_KL,m,0.3,1)
-    #theta, b = eigenpairs(m_KL,m)
+    theta, b = eigenpairs_discrete(max(m_KL,m),0.3,1)
     for i in range(N[level-1]):
         sample = draw_sample(theta,b,func_k,m,m_KL)[0]
         k_list[0].append(sample)
@@ -338,131 +272,123 @@ def mlmc_test(m_KL,m_0,N,func_k,Q,p_0,p_1):
     return estimator, c, Q_list, Y_list
 
 # calculate the multilevel Monte-Carlo estimator
-def mlmc_new(m_KL,M,func_k,Q,p_0,p_1,eps):
-    costs = 0 
+def mlmc_algo(m_KL,M,func_k,Q,p_0,p_1,eps,alpha):
+    costs = 0
+    initial_number = 20
      
-    estimator = 0
-    est_list = []
-    Q_list = [[]]
-    k_list = [[]]
+    Y_list = []
+    Q_list = []
+    k_list = []
+    N = []
     
     '''
     Step 1
+    Start with L=0.
     '''
-    level = 0 #start with L=0
+    L = 0
     
-    '''
-    Step 2
-    '''
-    #initial number of samples on Level L
-    N = [100]
-    
-    #Calculate Q on finest mesh 
-    m = M
-    theta, b = eigenpairs_discrete(m_KL,m,0.3,1,max(m,m_KL))
-    for i in range(N[-1]):
-        sample = draw_sample(theta,b,func_k,m,m_KL)
-        k_list[0].append(sample)
-        Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
-        costs += m
-    
-    #calculate mean
-    mean = 0
-    for i in range(N[-1]):
-        mean += Q_list[0][i]
-    mean = mean/N[-1]
-    
-    #calculate variance
-    var = 0
-    for i in range(N[-1]):
-        var += (Q_list[0][i]-mean)**2
-    var = var/N[-1]
-    
-    '''
-    Step 3
-    '''
-    c = 2/(eps**2)*math.sqrt(m*var)
-    N_L = c*math.sqrt(var/m)
-    N[-1] = int(N_L)
-    
-    print(N[-1])
-    for i in range(len(Q_list[0]),N[-1]):
-        sample = draw_sample(theta,b,func_k,m,m_KL)
-        k_list[0].append(sample)
-        Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
-        costs += m
-    
-    estimator = sum(Q_list[0])/N[-1]
-    
-    '''   
-    m = int(m/2)
-    Q_list.insert(0,[])
-    k_list.insert(0,[])
-    for i in range(N[-1]):
-        sample = convert_sample(k_list[1][i])
-        k_list[0].append(sample)
-        Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
-        costs += m
-    
-    #calculate mean
-    mean = 0
-    for i in range(N[-1]):
-        print((Q_list[1][i]-Q_list[0][i]))
-        mean += (Q_list[1][i]-Q_list[0][i])
-    mean = mean/N[-1]
-    
-    #calculate variance
-    var = 0
-    for i in range(N[-1]):
-        var += ((Q_list[1][i]-Q_list[0][i])-mean)**2
-    var = var/N[-1]
-    
-    N_L = math.sqrt(var/m)
-    
-    print(mean)
-    print(var)
-    print(N_L)
-    '''
-    
-    '''
-    #Calculate Q on finest mesh
-    m = (2**(level))*m_0
-    theta, b = eigenpairs_discrete(m_KL,m,0.3,1,max(m,m_KL))
-    for i in range(N[-1]):
-        sample = draw_sample(theta,b,func_k,m,m_KL)
-        k.append(sample)
-        Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
-        costs += m
-      
-    #go through all meshs
-    for i in range(level-1,0,-1):
-        #print(f"Level: {i+1}, Q = {Q_coarse_level}")
-        m = (2**i)*m_0
+    while(1):
+        '''
+        Step 2
+        '''
+        #initial number of samples on Level L
+        level = L+1
+        N.append(initial_number)
+   
+        Q_list.append([])
+        k_list.append([])
+        Y_list.append([])
         
-        Q_list.insert(0,[])
-        sum = 0
-        for j in range(N[i]):
-            Q_list[0].append(Q(k[j],solve_pde(k[j],m,p_0,p_1),p_1))
+        #Calculate Q on level L
+        m = (2**(L))*M 
+        theta, b = eigenpairs_discrete(max(m_KL,m),0.3,1)
+        for i in range(N[level-1]):
+            sample = draw_sample(theta,b,func_k,m,m_KL)[0]
+            k_list[L].append(sample)
+            Q_list[L].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
             costs += m
-            sum += (Q_list[0][j]-Q_list[1][j])
-        estimator += (sum/N[i])
+         
+        #calculate Y_L for each sample
+        if L==0:
+            for i in range(N[L]):
+                Y_list[L].append(Q_list[L][i])
+        else:
+            for j in range(N[L]):
+                sample = convert_sample(k_list[L][j])
+                k_list[L-1].append(sample)
+                Q_list[L-1].append(Q(sample,solve_pde(sample,int(m/2),p_0,p_1),p_1))
+                Y_list[L].append(Q_list[L][j]-Q_list[L-1][-1])
+                costs += m/2
+                
+        '''
+        Step 3
+        '''
+        for j in range(level):
+            #calculate mean
+            mean = np.mean(Y_list[j])
+                
+            #calculate variance
+            var = np.var(Y_list[j])
+            
+            m = (2**j)*M
+            c = 2*level*math.sqrt(m*var)/(eps**2)
+            N_L = c*math.sqrt(var/m)
+            N[j] = max(N[j],int(N_L))
         
-        for j in range(N[i],N[i-1]):
-            sample = draw_sample(theta,b,func_k,m,m_KL)
-            k.append(sample)
-            Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
-            c += m
+        print(N)
         
-    #Calculate Q on coarsest mesh
-    sum = 0
-    for i in range(N[1]):
-        sum += Q_list[0][i]
-    for i in range(N[1],N[0]):
-        sample = draw_sample(theta,b,func_k,m_0,m_KL)
-        sum += Q(sample,solve_pde(sample,m_0,p_0,p_1),p_1)
-        costs += m_0
-    estimator += (sum/N[0])
-    '''
+        '''
+        Step 4
+        Evaluate extra samples at each level as needed for the new N_l.
+        '''  
+        #Calculate Q on finest mesh
+        m = (2**(L))*M 
+        theta, b = eigenpairs_discrete(max(m_KL,m),0.3,1)
+        for i in range(initial_number,N[level-1]):
+            sample = draw_sample(theta,b,func_k,m,m_KL)[0]
+            k_list[L].append(sample)
+            Q_list[L].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
+            costs += m
+                  
+        #go through all meshs
+        for i in range(L-1,-1,-1):
+            m = int((2**i)*M)
+            for j in range(len(Q_list[i]),N[i+1]):
+                sample = convert_sample(k_list[i+1][j])
+                k_list[i].append(sample)
+                Q_list[i].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
+                Y_list[i+1].append(Q_list[i+1][j]-Q_list[i][-1])
+                costs += m
+            
+            for j in range(len(Q_list[i]),N[i]):
+                sample = draw_sample(theta,b,func_k,m,m_KL)[0]
+                k_list[i].append(sample)
+                Q_list[i].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
+                costs += m
+                        
+        #Calculate Y_0 on the coarsest mesh
+        for i in range(len(Y_list[0]),N[0]):
+            Y_list[0].append(Q_list[0][i])
+           
+        '''
+        Step 5
+        If L greater or equal 1, test for convergence.
+        '''
+        estimator = 0
+        for j in range(len(Y_list)):
+            estimator += sum(Y_list[j])/len(Y_list[j])
+        print(estimator)
+        
+        if L>=1:
+            print(abs(sum(Y_list[-1])/len(Y_list[-1]) - sum(Y_list[-2])/len(Y_list[-2])))
+            if(abs(sum(Y_list[-1])/len(Y_list[-1]) - sum(Y_list[-2])/len(Y_list[-2])) < M**(-alpha)):
+                break
+        '''
+        Step 6
+        Set L=L+1 and restart the algorithm.
+        '''
+        L = L + 1
+        
     print(f"Kosten: {costs}")
+    print(estimator)
     return estimator
-
