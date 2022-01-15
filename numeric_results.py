@@ -169,8 +169,8 @@ def standard_mc_keff_test(N,m_KL,m,func_k,func_p):
     
     estimation = mc.standard_mc(m_KL,m,N,func_k,p_0,p_1,mc.k_eff)[0]
     solution = mc.k_eff(l,r,p_1)
-    #print(estimation)
-    #print(solution)
+    print(estimation)
+    print(solution)
     print(abs(estimation-solution))
     return abs(estimation-solution)
  
@@ -195,7 +195,8 @@ def constant_variance(N,m_KL,m,func_k):
         x[i] = i
         v_mean[i] = math.log2(abs(np.mean(standard_mc[i])))
         v_var[i] = math.log2(abs(np.var(standard_mc[i])))
-        print(abs(np.var(standard_mc[i])))
+        print(v_var[i])
+
     '''    
     plt.plot(x,v_mean)
     plt.xlabel('Level l')
@@ -230,38 +231,124 @@ def constant_variance(N,m_KL,m,func_k):
 '''
 4) Calculate k_eff with Standard Montecarlo
 '''
-#standard_mc_keff_test(N=300,m_KL=800,m=64,func_k=func_k3,func_p=func_p3)
+#standard_mc_keff_test(N=300,m_KL=800,m=16,func_k=func_k3,func_p=func_p3)
 
 
 '''
 5) Variance of Q_M is independent of M
 '''
-#constant_variance(N=100,m_KL=800,m=[16,32,64,128,256],func_k=func_k3)
+#constant_variance(N=100,m_KL=800,m=[8192],func_k=func_k3)
+
+#print("\n ....................................................... \n")
 
 
-print("\n ....................................................... \n")
 
-multilevel_mc = mc.mlmc(800,16,[100,100,100,100,100],func_k3,mc.k_eff,1,0)
+#multilevel_mc = mc.mlmc_changed(800,16,[100,100,100],func_k3,mc.k_eff,1,0)
+#print(multilevel_mc[0])
+'''
+print('Varianz Y (MLMC)')
 print(math.log2(abs(np.var(multilevel_mc[3][0]))))
 print(math.log2(abs(np.var(multilevel_mc[3][1]))))
 print(math.log2(abs(np.var(multilevel_mc[3][2]))))
 print(math.log2(abs(np.var(multilevel_mc[3][3]))))
+print(math.log2(abs(np.var(multilevel_mc[3][4]))))
+print(math.log2(abs(np.var(multilevel_mc[3][5]))))
+print("___________________________________________________")
+print('Varianz Q (MLMC)')
+print(math.log2(abs(np.var(multilevel_mc[2][0]))))
+print(math.log2(abs(np.var(multilevel_mc[2][1]))))
+print(math.log2(abs(np.var(multilevel_mc[2][2]))))
+print(math.log2(abs(np.var(multilevel_mc[2][3]))))
+print(math.log2(abs(np.var(multilevel_mc[2][4]))))
+print(math.log2(abs(np.var(multilevel_mc[2][5]))))
+print(math.log2(abs(np.var(multilevel_mc[2][6]))))
+'''
 
-standard_mc = mc.standard_mc(800,16,100,func_k3,1,0,mc.k_eff)
+n = 100
+N = [n,n,n,n]
+multilevel_mc = mc.mlmc_changed(800,16,N,func_k3,mc.k_eff,1,0)
+
+'''
+for i in range(len(multilevel_mc[4])):
+    x = np.linspace(0,1,len(multilevel_mc[4]))
+    k = multilevel_mc[4][i]
+    plt.plot(x,k)
+plt.show()
+'''    
+y_mean = []
+y_var = []
+for i in range(len(multilevel_mc[3])):
+    y_mean.append(math.log2(abs(np.mean(multilevel_mc[3][i]))))
+    y_var.append(math.log2(abs(np.var(multilevel_mc[3][i]))))
+    
+q_mean = []
+q_var = []
+for i in range(len(multilevel_mc[2])):
+    q_mean.append(math.log2(abs(np.mean(multilevel_mc[2][i]))))
+    q_var.append(math.log2(abs(np.var(multilevel_mc[2][i]))))
+
+print('Varianz Y (MLMC)')
+print(y_var)
+
+print('Varianz Q (MLMC)')
+print(q_var)
+
+print('Mean Y (MLMC)')
+print(y_mean)
+
+print('Mean Q (MLMC)')
+print(q_mean)
+
+
+'''
+print("___________________________________________________")
+
+print('Varianz Q (MC)')
+standard_mc = mc.standard_mc(800,16,200,func_k3,1,0,mc.k_eff)
+print('m=16')
 print(math.log2(abs(np.var(standard_mc[2]))))
+print(math.log2(abs(np.mean(standard_mc[2]))))
 
-standard_mc = mc.standard_mc(800,32,100,func_k3,1,0,mc.k_eff)
+standard_mc = mc.standard_mc(800,32,200,func_k3,1,0,mc.k_eff)
+print('m=32')
 print(math.log2(abs(np.var(standard_mc[2]))))
+print(math.log2(abs(np.mean(standard_mc[2]))))
 
-standard_mc = mc.standard_mc(800,64,100,func_k3,1,0,mc.k_eff)
+standard_mc = mc.standard_mc(800,64,200,func_k3,1,0,mc.k_eff)
+print('m=64')
 print(math.log2(abs(np.var(standard_mc[2]))))
+print(math.log2(abs(np.mean(standard_mc[2]))))
 
-standard_mc = mc.standard_mc(800,128,100,func_k3,1,0,mc.k_eff)
+standard_mc = mc.standard_mc(800,128,200,func_k3,1,0,mc.k_eff)
+print('m=128')
 print(math.log2(abs(np.var(standard_mc[2]))))
+print(math.log2(abs(np.mean(standard_mc[2]))))
 
-standard_mc = mc.standard_mc(800,64,100,func_k3,1,0,mc.k_eff)
+standard_mc = mc.standard_mc(800,256,200,func_k3,1,0,mc.k_eff)
+print('m=256')
 print(math.log2(abs(np.var(standard_mc[2]))))
+print(math.log2(abs(np.mean(standard_mc[2]))))
 
+standard_mc = mc.standard_mc(800,512,200,func_k3,1,0,mc.k_eff)
+print('m=512')
+print(math.log2(abs(np.var(standard_mc[2]))))
+print(math.log2(abs(np.mean(standard_mc[2]))))
+
+standard_mc = mc.standard_mc(800,1024,200,func_k3,1,0,mc.k_eff)
+print('m=1024')
+print(math.log2(abs(np.var(standard_mc[2]))))
+print(math.log2(abs(np.mean(standard_mc[2]))))
+
+standard_mc = mc.standard_mc(800,2048,200,func_k3,1,0,mc.k_eff)
+print('m=2048')
+print(math.log2(abs(np.var(standard_mc[2]))))
+print(math.log2(abs(np.mean(standard_mc[2]))))
+
+standard_mc = mc.standard_mc(800,5096,200,func_k3,1,0,mc.k_eff)
+print('m=5096')
+print(math.log2(abs(np.var(standard_mc[2]))))
+print(math.log2(abs(np.mean(standard_mc[2]))))
+'''
 '''
 #print(f"Multilevel MC \n Ergebnis: {multilevel_mc[0]}, Fehler: {abs(res-multilevel_mc[0])}, Kosten: {multilevel_mc[1]}")
 
@@ -300,5 +387,5 @@ plt.ylabel(r'$\log_2$-Varianz')
 plt.show()
 '''
 
-#mc.mlmc_algo(800,16,func_k3,mc.k_eff,1,0,1e-2,1.75)
+#mc.mlmc_algo(800,16,func_k3,mc.k_eff,1,0,1e-1,1.75)
 #error_KL([10,50,100,150],100,func_k3,0.3,1)
