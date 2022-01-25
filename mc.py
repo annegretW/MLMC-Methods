@@ -19,7 +19,6 @@ def draw_sample(theta,b,func_k,m,m_KL,sigma=None):
                 Vector of random variables sigma (vector of size m_KL)
     '''
     n = m
-    
     k = np.zeros(n)
 
     if sigma is None:
@@ -49,7 +48,7 @@ def convert_sample(k):
 
 def convert_sample(k,m):
     '''
-    Converts a sample from level m to a sample of level m/2
+    Converts a sample from level len(k) to a sample of level m
     '''
     n = len(k)
     l = n/m 
@@ -121,6 +120,7 @@ def standard_mc(m_KL,m,N,func_k,p_0,p_1,Q):
         sum += q
         c += m
         
+    print(sum/N)
     return sum/N, c, Q_list
 
 # calculate the multilevel Monte-Carlo estimator
@@ -151,7 +151,7 @@ def mlmc(m_KL,m_0,N,func_k,Q,p_0,p_1):
         k_list.insert(0,[])
         sum = 0
         for j in range(N[i]):
-            sample = convert_sample(k_list[1][j])
+            sample = convert_sample(k_list[1][j],m)
             k_list[0].append(sample)
             Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
             #Q_new = Q(sample,solve_pde(sample,m,p_0,p_1),p_1)
@@ -176,6 +176,7 @@ def mlmc(m_KL,m_0,N,func_k,Q,p_0,p_1):
         sum += Q_list[0][i]
     estimator += (sum/N[0])
     
+    print(estimator)
     return estimator, c, Q_list, Y_list, k_list
 
 # calculate the multilevel Monte-Carlo estimator
@@ -189,12 +190,13 @@ def mlmc_changed(m_KL,m_0,N,func_k,Q,p_0,p_1):
     Q_list = [[]]
     
     #Calculate Q on finest mesh
-    m = (2**(level-1))*m_0 #mesh size
+    m = (2**(level-1))*m_0
     theta, b = eigenpairs_discrete(max(m_KL,m),0.3,1)
     for i in range(N[level-1]):
-        sample = draw_sample(theta,b,func_k,m+1,m_KL)[0]
+        sample = draw_sample(theta,b,func_k,2*m,m_KL)[0]
         k_list.append(sample)
-        Q_list[0].append(Q(sample,solve_pde(convert_sample(sample,m),m,p_0,p_1),p_1))
+        sample_conv = convert_sample(sample,m)
+        Q_list[0].append(Q(sample_conv,solve_pde(sample_conv,m,p_0,p_1),p_1))
         c += m
               
     #go through all meshs
@@ -203,7 +205,7 @@ def mlmc_changed(m_KL,m_0,N,func_k,Q,p_0,p_1):
         
         Q_list.insert(0,[])
         Y_list.insert(0,[])
-        sum = 0
+        #summe = 0
         for j in range(N[i]):
             sample = convert_sample(k_list[j],m)
             Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))            
@@ -211,24 +213,32 @@ def mlmc_changed(m_KL,m_0,N,func_k,Q,p_0,p_1):
             Y_list[0].append(Q_list[1][j]-Q_list[0][j])
             #Y_list[0].append(Q_list[1][j]-Q_new)
             c += m
-            sum += (Q_list[1][j]-Q_list[0][j])
+            #summe += (Q_list[1][j]-Q_list[0][j])
             #sum += (Q_list[1][j]-Q_new)
           
-        estimator += (sum/N[i])
+        #estimator += (sum/N[i])
+        #print(sum/N[i])
         
-        #for j in range(N[i],N[i-1]):
-        for j in range(N[i-1]):
+        for j in range(N[i],N[i-1]):
+            #for j in range(N[i-1]):
             sample = draw_sample(theta,b,func_k,m,m_KL)[0]
+            #sample = convert_sample(sample,m)
             k_list.append(sample)
             Q_list[0].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
             c += m
                     
     #Calculate Q on coarsest mesh
-    sum = 0
-    for i in range(N[0]):
-        sum += Q_list[0][i]
-    estimator += (sum/N[0])
-    
+    #summe = 0
+    #for i in range(N[0]):
+    #    summe += Q_list[0][i]
+        
+    Y_list.insert(0,Q_list[0])
+
+    estimator = 0
+    for j in range(len(Y_list)):
+        estimator += sum(Y_list[j])/len(Y_list[j])
+        print(estimator)
+        
     return estimator, c, Q_list, Y_list, k_list
 
 # calculate the multilevel Monte-Carlo estimator
@@ -256,14 +266,15 @@ def mlmc_algo(m_KL,M,func_k,Q,p_0,p_1,eps,alpha):
         N.append(initial_number)
    
         Q_list.append([])
-        k_list.append([])
         Y_list.append([])
+        k_list.append([])
         
         #Calculate Q on level L
         m = (2**(L))*M 
         theta, b = eigenpairs_discrete(max(m_KL,m),0.3,1)
         for i in range(N[level-1]):
-            sample = draw_sample(theta,b,func_k,m,m_KL)[0]
+            sample = draw_sample(theta,b,func_k,2*m,m_KL)[0]
+            sample = convert_sample(sample,m)
             k_list[L].append(sample)
             Q_list[L].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
             costs += m
@@ -274,8 +285,8 @@ def mlmc_algo(m_KL,M,func_k,Q,p_0,p_1,eps,alpha):
                 Y_list[L].append(Q_list[L][i])
         else:
             for j in range(N[L]):
-                sample = convert_sample(k_list[L][j])
-                k_list[L-1].append(sample)
+                sample = convert_sample(k_list[L][j],int(m/2))
+                k_list[L-1].append(k_list[L][j])
                 Q_list[L-1].append(Q(sample,solve_pde(sample,int(m/2),p_0,p_1),p_1))
                 Y_list[L].append(Q_list[L][j]-Q_list[L-1][-1])
                 costs += m/2
@@ -283,18 +294,24 @@ def mlmc_algo(m_KL,M,func_k,Q,p_0,p_1,eps,alpha):
         '''
         Step 3
         '''
+        var_sum = 0
         for j in range(level):
-            #calculate mean
-            mean = np.mean(Y_list[j])
-                
-            #calculate variance
+            m = (2**j)*M
+            var_sum += math.sqrt(np.var(Y_list[j])*m)
+            
+        for j in range(level):
             var = np.var(Y_list[j])
             
             m = (2**j)*M
-            c = 2*level*math.sqrt(m*var)/(eps**2)
+            c = 2*var_sum/(eps**2)
             N_L = c*math.sqrt(var/m)
-            N[j] = max(N[j],int(N_L))
-        
+            
+            #number of samples should not be decreased (we have drawn these samples already)
+            if j==0:
+                N[j] = max(N[j],int(N_L))
+            else:
+                N[j] = min(N[j-1],N[j])
+                N[j] = max(N[j],int(N_L))
         print(N)
         
         '''
@@ -307,6 +324,7 @@ def mlmc_algo(m_KL,M,func_k,Q,p_0,p_1,eps,alpha):
         for i in range(initial_number,N[level-1]):
             sample = draw_sample(theta,b,func_k,m,m_KL)[0]
             k_list[L].append(sample)
+            #k_list.append(sample)
             Q_list[L].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
             costs += m
                   
@@ -314,8 +332,8 @@ def mlmc_algo(m_KL,M,func_k,Q,p_0,p_1,eps,alpha):
         for i in range(L-1,-1,-1):
             m = int((2**i)*M)
             for j in range(len(Q_list[i]),N[i+1]):
-                sample = convert_sample(k_list[i+1][j])
-                k_list[i].append(sample)
+                sample = convert_sample(k_list[i+1][j],m)
+                k_list[i].append(k_list[i+1][j])
                 Q_list[i].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
                 Y_list[i+1].append(Q_list[i+1][j]-Q_list[i][-1])
                 costs += m
@@ -323,6 +341,7 @@ def mlmc_algo(m_KL,M,func_k,Q,p_0,p_1,eps,alpha):
             for j in range(len(Q_list[i]),N[i]):
                 sample = draw_sample(theta,b,func_k,m,m_KL)[0]
                 k_list[i].append(sample)
+                #k_list.append(sample)
                 Q_list[i].append(Q(sample,solve_pde(sample,m,p_0,p_1),p_1))
                 costs += m
                         
@@ -335,15 +354,16 @@ def mlmc_algo(m_KL,M,func_k,Q,p_0,p_1,eps,alpha):
         If L greater or equal 1, test for convergence.
         '''
         estimator = 0
-        print(len(Y_list))
         for j in range(len(Y_list)):
             estimator += sum(Y_list[j])/len(Y_list[j])
-        print(estimator)
         
         if L>=1:
-            print(abs(sum(Y_list[-1])/len(Y_list[-1]) - sum(Y_list[-2])/len(Y_list[-2])))
-            if(abs(sum(Y_list[-1])/len(Y_list[-1]) - sum(Y_list[-2])/len(Y_list[-2])) < M**(-alpha)):
+            #print(abs(sum(Y_list[-1])/len(Y_list[-1]) - sum(Y_list[-2])/len(Y_list[-2])))
+            if(max(abs(sum(Y_list[-1])/len(Y_list[-1])),abs(sum(Y_list[-2])/len(Y_list[-2]))) < M**(-alpha)):
                 break
+            
+        if L>=5:
+            break
         '''
         Step 6
         Set L=L+1 and restart the algorithm.
